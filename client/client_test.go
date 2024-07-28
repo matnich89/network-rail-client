@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/matnich89/network-rail-client/model/movement"
 	"github.com/matnich89/network-rail-client/model/realtime"
 	"sync"
 	"testing"
@@ -99,12 +100,25 @@ func TestSubAllTrainMovement(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, movementChan)
 
-	testMovement := "Test train movement"
-	subChan <- &stomp.Message{Body: []byte(testMovement)}
+	// Simulate receiving a message with the correct structure
+	testMovement := []movement.Message{
+		{
+			Header: movement.Header{MsgType: movement.TrainMovement},
+			Body: map[string]interface{}{
+				"event_type": "DEPARTURE",
+				"train_id":   "1A23",
+			},
+		},
+	}
+	msgBody, _ := json.Marshal(testMovement)
+	subChan <- &stomp.Message{Body: msgBody}
 
 	select {
 	case receivedMovement := <-movementChan:
-		assert.Equal(t, testMovement, receivedMovement)
+		assert.IsType(t, &movement.TrainMovementBody{}, receivedMovement)
+		movementBody := receivedMovement.(*movement.TrainMovementBody)
+		assert.Equal(t, "DEPARTURE", movementBody.EventType)
+		assert.Equal(t, "1A23", movementBody.TrainID)
 	case <-time.After(time.Second):
 		t.Fatal("Timed out waiting for message")
 	}
@@ -117,6 +131,7 @@ func TestSubRTPPM_Error(t *testing.T) {
 	client := &NetworkRailClient{
 		stompConnection: mockConn,
 		ctx:             context.Background(),
+		wg:              &sync.WaitGroup{},
 	}
 
 	mockConn.On("Subscribe", "/topic/RTPPM_ALL", stomp.AckAuto).Return((*stomp.Subscription)(nil), errors.New("subscription error"))

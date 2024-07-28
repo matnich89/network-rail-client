@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/go-stomp/stomp/v3"
 	"github.com/go-stomp/stomp/v3/frame"
+	"github.com/matnich89/network-rail-client/model/movement"
 	"github.com/matnich89/network-rail-client/model/realtime"
 	"log"
 	"sync"
@@ -25,7 +26,7 @@ type NetworkRailClient struct {
 	stompConnection       Connection
 	wg                    *sync.WaitGroup
 	rtppmChan             chan *realtime.RTPPMDataMsg
-	allTrainMovementsChan chan string
+	allTrainMovementsChan chan movement.Body
 	ctx                   context.Context
 }
 
@@ -77,14 +78,14 @@ func (nr *NetworkRailClient) SubRTPPM() (chan *realtime.RTPPMDataMsg, error) {
 	return nr.rtppmChan, nil
 }
 
-func (nr *NetworkRailClient) SubAllTrainMovement() (chan string, error) {
+func (nr *NetworkRailClient) SubAllTrainMovement() (chan movement.Body, error) {
 	sub, err := nr.stompConnection.Subscribe("/topic/TRAIN_MVT_ALL_TOC", stomp.AckAuto)
 
 	if err != nil {
 		return nil, fmt.Errorf("could not subscribe to All Train Movements topic: %v", err)
 	}
 
-	nr.allTrainMovementsChan = make(chan string, 100)
+	nr.allTrainMovementsChan = make(chan movement.Body, 100)
 
 	nr.wg.Add(1)
 	go func() {
@@ -94,15 +95,21 @@ func (nr *NetworkRailClient) SubAllTrainMovement() (chan string, error) {
 		for {
 			select {
 			case msg := <-sub.C:
-				movement := string(msg.Body)
-				nr.allTrainMovementsChan <- movement
+				var message []movement.Message
+				err = json.Unmarshal(msg.Body, &message)
+				if err != nil {
+					fmt.Printf("Error unmarshaling message: %v\n", err)
+					continue
+				}
+				for _, m := range message {
+					data := movement.Convert(m.Body, m.Header.MsgType)
+					nr.allTrainMovementsChan <- data
+				}
 			case <-nr.ctx.Done():
 				log.Println("All Train Movements Ending...")
 				return
 			}
 		}
 	}()
-
 	return nr.allTrainMovementsChan, nil
-
 }
