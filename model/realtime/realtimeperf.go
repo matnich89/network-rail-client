@@ -1,4 +1,4 @@
-package model
+package realtime
 
 type RTPPMDataMsg struct {
 	RTPPMDataMsgV1 RTPPMDataMsgV1 `json:"RTPPMDataMsgV1"`
