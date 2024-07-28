@@ -1,10 +1,14 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/go-stomp/stomp/v3"
-	"github.com/matnich89/network-rail-client/model"
+	"github.com/go-stomp/stomp/v3/frame"
+	"github.com/matnich89/network-rail-client/model/movement"
+	"github.com/matnich89/network-rail-client/model/realtime"
+	"log"
 	"sync"
 	"time"
 )
@@ -14,14 +18,19 @@ const (
 	port = "61618"
 )
 
-type NetworkRailClient struct {
-	stompConnection *stomp.Conn
-	wg              *sync.WaitGroup
-	rtppmChan       chan *model.RTPPMDataMsg
-	stopChan        chan struct{}
+type Connection interface {
+	Subscribe(destination string, ack stomp.AckMode, opts ...func(frame *frame.Frame) error) (*stomp.Subscription, error)
 }
 
-func NewNetworkRailClient(username, password string) (*NetworkRailClient, error) {
+type NetworkRailClient struct {
+	stompConnection       Connection
+	wg                    *sync.WaitGroup
+	rtppmChan             chan *realtime.RTPPMDataMsg
+	allTrainMovementsChan chan movement.Body
+	ctx                   context.Context
+}
+
+func NewNetworkRailClient(ctx context.Context, username, password string) (*NetworkRailClient, error) {
 	conn, err := stomp.Dial("tcp", host+":"+port,
 		stomp.ConnOpt.Login(username, password),
 		stomp.ConnOpt.HeartBeat(time.Minute, time.Minute),
@@ -32,23 +41,17 @@ func NewNetworkRailClient(username, password string) (*NetworkRailClient, error)
 		return nil, fmt.Errorf("could not connect to Network Rail: %v", err)
 	}
 
-	return &NetworkRailClient{stompConnection: conn, wg: &sync.WaitGroup{}, stopChan: make(chan struct{})}, nil
+	return &NetworkRailClient{stompConnection: conn, wg: &sync.WaitGroup{}, ctx: ctx}, nil
 }
 
-func (nr *NetworkRailClient) Disconnect() error {
-	close(nr.stopChan)
-	nr.wg.Wait()
-	return nr.stompConnection.Disconnect()
-}
-
-func (nr *NetworkRailClient) SubRTPPM() (chan *model.RTPPMDataMsg, error) {
+func (nr *NetworkRailClient) SubRTPPM() (chan *realtime.RTPPMDataMsg, error) {
 	sub, err := nr.stompConnection.Subscribe("/topic/RTPPM_ALL", stomp.AckAuto)
 
 	if err != nil {
-		return nil, fmt.Errorf("could not subscribe to Topic Rail: %v", err)
+		return nil, fmt.Errorf("could not subscribe to RTPPM Topic: %v", err)
 	}
 
-	nr.rtppmChan = make(chan *model.RTPPMDataMsg, 10)
+	nr.rtppmChan = make(chan *realtime.RTPPMDataMsg, 10)
 
 	nr.wg.Add(1)
 	go func() {
@@ -58,18 +61,55 @@ func (nr *NetworkRailClient) SubRTPPM() (chan *model.RTPPMDataMsg, error) {
 		for {
 			select {
 			case msg := <-sub.C:
-				var rtppmMsg model.RTPPMDataMsg
+				var rtppmMsg realtime.RTPPMDataMsg
 				err := json.Unmarshal(msg.Body, &rtppmMsg)
 				if err != nil {
 					fmt.Printf("Error unmarshaling message: %v\n", err)
 					continue
 				}
 				nr.rtppmChan <- &rtppmMsg
-			case <-nr.stopChan:
+			case <-nr.ctx.Done():
+				log.Println("RTPPM Ending...")
 				return
 			}
 		}
 	}()
 
 	return nr.rtppmChan, nil
+}
+
+func (nr *NetworkRailClient) SubAllTrainMovement() (chan movement.Body, error) {
+	sub, err := nr.stompConnection.Subscribe("/topic/TRAIN_MVT_ALL_TOC", stomp.AckAuto)
+
+	if err != nil {
+		return nil, fmt.Errorf("could not subscribe to All Train Movements topic: %v", err)
+	}
+
+	nr.allTrainMovementsChan = make(chan movement.Body, 100)
+
+	nr.wg.Add(1)
+	go func() {
+		defer nr.wg.Done()
+		defer close(nr.allTrainMovementsChan)
+
+		for {
+			select {
+			case msg := <-sub.C:
+				var message []movement.Message
+				err = json.Unmarshal(msg.Body, &message)
+				if err != nil {
+					fmt.Printf("Error unmarshaling message: %v\n", err)
+					continue
+				}
+				for _, m := range message {
+					data := movement.Convert(m.Body, m.Header.MsgType)
+					nr.allTrainMovementsChan <- data
+				}
+			case <-nr.ctx.Done():
+				log.Println("All Train Movements Ending...")
+				return
+			}
+		}
+	}()
+	return nr.allTrainMovementsChan, nil
 }
