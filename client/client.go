@@ -43,7 +43,14 @@ func NewNetworkRailClient(ctx context.Context, username, password string) (*Netw
 		return nil, fmt.Errorf("could not connect to Network Rail: %v", err)
 	}
 
-	return &NetworkRailClient{stompConnection: conn, wg: &sync.WaitGroup{}, ErrCh: make(chan error, 100), ctx: ctx}, nil
+	client := &NetworkRailClient{stompConnection: conn, wg: &sync.WaitGroup{}, ErrCh: make(chan error, 100), ctx: ctx}
+
+	go func() {
+		<-ctx.Done()
+		client.wg.Wait()
+	}()
+
+	return client, nil
 }
 
 func (nr *NetworkRailClient) SubRTPPM() (chan *realtime.RTPPMDataMsg, error) {
@@ -68,7 +75,7 @@ func (nr *NetworkRailClient) SubRTPPM() (chan *realtime.RTPPMDataMsg, error) {
 				var rtppmMsg realtime.RTPPMDataMsg
 				err := json.Unmarshal(msg.Body, &rtppmMsg)
 				if err != nil {
-					fmt.Printf("Error unmarshaling message: %v\n", err)
+					nr.ErrCh <- fmt.Errorf("could not unmarshal RTPPM data: %v", err)
 					continue
 				}
 				nr.rtppmChan <- &rtppmMsg

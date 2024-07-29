@@ -22,6 +22,7 @@ func (nr *NetworkRailClient) SubAllTrainMovement() (<-chan movement.Body, error)
 
 	nr.allTrainMovementsChan = make(chan movement.Body, 100)
 
+	nr.wg.Add(1)
 	go nr.handleSubscription(sub, nr.allTrainMovementsChan)
 
 	return nr.allTrainMovementsChan, nil
@@ -48,6 +49,7 @@ func (nr *NetworkRailClient) SubMultiTrainCompanyMovements(operators []model.Tra
 
 		nr.companyMovementsChans = append(nr.companyMovementsChans, trainCompanySub.SubChan)
 
+		nr.wg.Add(1)
 		go nr.handleSubscription(sub, trainCompanySub.SubChan)
 	}
 
@@ -60,7 +62,6 @@ func (nr *NetworkRailClient) handleSubscription(sub *stomp.Subscription, movemen
 		close(movementChan)
 	}()
 
-	nr.wg.Add(1)
 	log.Printf("Subscribing to Train Movements Topic: %s", sub.Destination())
 
 	for {
