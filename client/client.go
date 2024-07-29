@@ -43,7 +43,7 @@ func NewNetworkRailClient(ctx context.Context, username, password string) (*Netw
 		return nil, fmt.Errorf("could not connect to Network Rail: %v", err)
 	}
 
-	return &NetworkRailClient{stompConnection: conn, wg: &sync.WaitGroup{}, ctx: ctx}, nil
+	return &NetworkRailClient{stompConnection: conn, wg: &sync.WaitGroup{}, ErrCh: make(chan error, 100), ctx: ctx}, nil
 }
 
 func (nr *NetworkRailClient) SubRTPPM() (chan *realtime.RTPPMDataMsg, error) {

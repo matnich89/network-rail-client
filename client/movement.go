@@ -55,8 +55,10 @@ func (nr *NetworkRailClient) SubMultiTrainCompanyMovements(operators []model.Tra
 }
 
 func (nr *NetworkRailClient) handleSubscription(sub *stomp.Subscription, movementChan chan<- movement.Body) {
-	defer nr.wg.Done()
-	defer close(movementChan)
+	defer func() {
+		nr.wg.Done()
+		close(movementChan)
+	}()
 
 	nr.wg.Add(1)
 	log.Printf("Subscribing to Train Movements Topic: %s", sub.Destination())
@@ -75,7 +77,7 @@ func (nr *NetworkRailClient) handleSubscription(sub *stomp.Subscription, movemen
 func (nr *NetworkRailClient) processMessage(msg *stomp.Message, movementChan chan<- movement.Body) {
 	var messages []movement.Message
 	if err := json.Unmarshal(msg.Body, &messages); err != nil {
-		log.Printf("Error unmarshaling message: %v", err)
+		nr.ErrCh <- err
 		return
 	}
 
