@@ -27,6 +27,8 @@ type NetworkRailClient struct {
 	wg                    *sync.WaitGroup
 	rtppmChan             chan *realtime.RTPPMDataMsg
 	allTrainMovementsChan chan movement.Body
+	companyMovementsChans []chan movement.Body
+	ErrCh                 chan error
 	ctx                   context.Context
 }
 
@@ -41,7 +43,7 @@ func NewNetworkRailClient(ctx context.Context, username, password string) (*Netw
 		return nil, fmt.Errorf("could not connect to Network Rail: %v", err)
 	}
 
-	return &NetworkRailClient{stompConnection: conn, wg: &sync.WaitGroup{}, ctx: ctx}, nil
+	return &NetworkRailClient{stompConnection: conn, wg: &sync.WaitGroup{}, ErrCh: make(chan error, 100), ctx: ctx}, nil
 }
 
 func (nr *NetworkRailClient) SubRTPPM() (chan *realtime.RTPPMDataMsg, error) {
@@ -55,8 +57,10 @@ func (nr *NetworkRailClient) SubRTPPM() (chan *realtime.RTPPMDataMsg, error) {
 
 	nr.wg.Add(1)
 	go func() {
-		defer nr.wg.Done()
-		defer close(nr.rtppmChan)
+		defer func() {
+			nr.wg.Done()
+			close(nr.rtppmChan)
+		}()
 
 		for {
 			select {
@@ -76,40 +80,4 @@ func (nr *NetworkRailClient) SubRTPPM() (chan *realtime.RTPPMDataMsg, error) {
 	}()
 
 	return nr.rtppmChan, nil
-}
-
-func (nr *NetworkRailClient) SubAllTrainMovement() (chan movement.Body, error) {
-	sub, err := nr.stompConnection.Subscribe("/topic/TRAIN_MVT_ALL_TOC", stomp.AckAuto)
-
-	if err != nil {
-		return nil, fmt.Errorf("could not subscribe to All Train Movements topic: %v", err)
-	}
-
-	nr.allTrainMovementsChan = make(chan movement.Body, 100)
-
-	nr.wg.Add(1)
-	go func() {
-		defer nr.wg.Done()
-		defer close(nr.allTrainMovementsChan)
-
-		for {
-			select {
-			case msg := <-sub.C:
-				var message []movement.Message
-				err = json.Unmarshal(msg.Body, &message)
-				if err != nil {
-					fmt.Printf("Error unmarshaling message: %v\n", err)
-					continue
-				}
-				for _, m := range message {
-					data := movement.Convert(m.Body, m.Header.MsgType)
-					nr.allTrainMovementsChan <- data
-				}
-			case <-nr.ctx.Done():
-				log.Println("All Train Movements Ending...")
-				return
-			}
-		}
-	}()
-	return nr.allTrainMovementsChan, nil
 }
