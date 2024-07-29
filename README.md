@@ -1,6 +1,7 @@
 # Network Rail Client
 
-This Go package provides a client for connecting to and consuming data from the Network Rail data feeds. It handles Real-Time Public Performance Measure (RTPPM) and Train Movement data feeds.
+This Go package provides a client for connecting to and consuming data from the Network Rail data feeds. It handles
+Real-Time Public Performance Measure (RTPPM) and Train Movement data feeds.
 
 ## Installation
 
@@ -34,7 +35,8 @@ Subscribes to all train movement messages and returns a channel of movement data
 
 ### `(nr *NetworkRailClient) SubMultiTrainCompanyMovements(operators []model.TrainOperator) ([]*TrainCompanySub, error)`
 
-Subscribes to train movement messages for specific train operating companies and returns a slice of TrainCompanySub structures, each containing a channel for that company's movement data.
+Subscribes to train movement messages for specific train operating companies and returns a slice of TrainCompanySub
+structures, each containing a channel for that company's movement data.
 
 ## Data Models
 
@@ -195,12 +197,15 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Disclaimer
 
-This client is unofficial and is not affiliated with Network Rail. Users must comply with Network Rail's terms of service when using this client.
+This client is unofficial and is not affiliated with Network Rail. Users must comply with Network Rail's terms of
+service when using this client.
 
 ## Resources
 
+For Network Rail data-feed info, check out
+the [Network Rail Open Data Feeds](https://www.networkrail.co.uk/who-we-are/transparency-and-ethics/transparency/open-data-feeds/)
+page.
 
-For Network Rail data-feed info, check out the [Network Rail Open Data Feeds](https://www.networkrail.co.uk/who-we-are/transparency-and-ethics/transparency/open-data-feeds/) page.
-
-For documents on how to interact with the feeds, visit the [Open Rail Wiki](https://wiki.openraildata.com/index.php?title=Main_Page).
+For documents on how to interact with the feeds, visit
+the [Open Rail Wiki](https://wiki.openraildata.com/index.php?title=Main_Page).
 
