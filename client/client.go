@@ -68,7 +68,7 @@ func (nr *NetworkRailClient) SubRTPPM() (chan *realtime.RTPPMDataMsg, error) {
 				var rtppmMsg realtime.RTPPMDataMsg
 				err := json.Unmarshal(msg.Body, &rtppmMsg)
 				if err != nil {
-					fmt.Printf("Error unmarshaling message: %v\n", err)
+					nr.ErrCh <- fmt.Errorf("could not unmarshal RTPPM data: %v", err)
 					continue
 				}
 				nr.rtppmChan <- &rtppmMsg
