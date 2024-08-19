@@ -24,13 +24,14 @@ type Connection interface {
 }
 
 type NetworkRailClient struct {
-	stompConnection       Connection
-	wg                    *sync.WaitGroup
-	rtppmChan             chan *realtime.RTPPMDataMsg
-	allTrainMovementsChan chan movement.Body
-	companyMovementsChans []chan movement.Body
-	ErrCh                 chan error
-	ctx                   context.Context
+	stompConnection              Connection
+	wg                           *sync.WaitGroup
+	rtppmChan                    chan *realtime.RTPPMDataMsg
+	allTrainMovementsChan        chan movement.Body
+	allFreightTrainMovementsChan chan movement.Body
+	companyMovementsChans        []chan movement.Body
+	ErrCh                        chan error
+	ctx                          context.Context
 }
 
 func NewNetworkRailClient(ctx context.Context, username, password string) (*NetworkRailClient, error) {
@@ -109,7 +110,7 @@ func (nr *NetworkRailClient) SubAllTrainMovement() (<-chan movement.Body, error)
 	return nr.allTrainMovementsChan, nil
 }
 
-func (nr *NetworkRailClient) SubMultiTrainCompanyMovements(operators []model.TrainOperator) ([]*TrainCompanySub, error) {
+func (nr *NetworkRailClient) SubPassengerTrainCompanyMovements(operators []model.TrainOperator) ([]*TrainCompanySub, error) {
 	if len(operators) == 0 {
 		return nil, fmt.Errorf("no operators provided")
 	}
@@ -135,6 +136,20 @@ func (nr *NetworkRailClient) SubMultiTrainCompanyMovements(operators []model.Tra
 	}
 
 	return trainCompanySubs, nil
+}
+
+func (nr *NetworkRailClient) SubAllFreightTrainMovement() (<-chan movement.Body, error) {
+	sub, err := nr.stompConnection.Subscribe("/topic/TRAIN_MVT_ALL_TOC", stomp.AckAuto)
+	if err != nil {
+		return nil, fmt.Errorf("could not subscribe to All Train Movements topic: %w", err)
+	}
+
+	nr.allFreightTrainMovementsChan = make(chan movement.Body, 100)
+
+	nr.wg.Add(1)
+	go nr.handleSubscription(sub, nr.allTrainMovementsChan)
+
+	return nr.allFreightTrainMovementsChan, nil
 }
 
 func (nr *NetworkRailClient) handleSubscription(sub *stomp.Subscription, movementChan chan<- movement.Body) {
