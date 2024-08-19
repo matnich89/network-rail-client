@@ -139,7 +139,7 @@ func (nr *NetworkRailClient) SubPassengerTrainCompanyMovements(operators []model
 }
 
 func (nr *NetworkRailClient) SubAllFreightTrainMovement() (<-chan movement.Body, error) {
-	sub, err := nr.stompConnection.Subscribe("/topic/TRAIN_MVT_ALL_TOC", stomp.AckAuto)
+	sub, err := nr.stompConnection.Subscribe("/topic/TRAIN_MVT_FREIGHT", stomp.AckAuto)
 	if err != nil {
 		return nil, fmt.Errorf("could not subscribe to All Train Movements topic: %w", err)
 	}
